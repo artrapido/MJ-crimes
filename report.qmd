@@ -1,0 +1,1099 @@
+---
+title: "Marijuana Related Crime (denver)"
+author:
+  - first author's name (Niloufar)
+  - second author's name (Sergey)
+  - third author's name (Nassim)
+date: 2022-12-1
+abstract: "The principal question of the project was determination of key features and factors of MJ-related crimes committed in Denver in connection with industrial (on the one hand) and non-industrial (on the other hand) objects or victims. The data used was taken from the Denver Police Department and covered the period between years 2015 and 2020. The project highlighted several geographycal units where certain kinds of crimes are more likely to be committed and suggested that MJ-related delinquency in Denver is criminologically closer to property-oriented one and should be combatted accordingly. However, the most important outcome was that any single aspect of a crime (be it locale, type or time) is never sufficient to make good predictions on the rest of the aspects, at least on industrial/non-industrial nature of the crime."
+format: 
+  html:
+    code-fold: true
+    standalone: true
+    embed-resources: true
+    toc: true
+---
+
+<div style="max-width:1000px; text-align: justify;">
+## Introduction
+### Questions
+For this project, we want to answer the following questions which are about *MArijuana related crimes* in Denver, Colorado.
+
+(@) Geographical issues. How much location of the district contribute into crime features (like offense_type and offense_category by neighbourhoods)? Most interestingly we may put it onto the city map and understand does airport nearby help planting weed, do people do it in their flats or rather in countryhouses etc.
+By this question, we want to investigate if there is any correlation between the **type of crime** and **location**
+
+(@) Criminology issues. Relation between Marijuana and other types of crimes (e. g. are they against property or rather violent?).
+
+(@) Machine learning problems: classify whether certrain crime is industry or non-industry type.
+
+### With what data?
+In order to do our project, we selected a data set from kaggle, called **Marijuana related Crime**. The dataframe has a shape of 14 variables (6 numeric and 8 char type) and 1201 observations. Vast majority of columns have a few NA values.
+
+The crimes included into the dataset are related or connected with marijuana in any manner, either directly or indirectly. For instance, there may be a crime when marijuana was sold or illegally possessed as well as a crime when just the criminal was a marijuana consumer stealing something in the most ordinary way. Crimes when marijuana itself was a crime target (e. g. was stolen, exacted, its cultivation was illegally infringed) are NOT included into the data.
+
+Marijuana is legalized in the state of Colorado where Denver is located. So when you see a crime labeled as 'Marijuana possession', this means that the amount of marijuana was beyond the legal limits, or its quality did not match the law (THC content was too high), or a person was under the age to possess it.
+
+All the columns are more or less clear in terms of waht they mean except for MJ_RELATION_TYPE taking values 'INDUSTRY' or 'NON-INDUSTRY'. Industry-related crimes involve marijuana and licensed marijuana facilities. These reported crimes are committed against the licensed industry or by the industry itself.
+Non-Industry crimes are crimes reported where marijuana is the primary target in the commission of these crime but the marijuana has no readily apparent tie to a licensed operation.
+
+At the same time all the crimes are somehow related to marijuana or connected with it. This means no comparison with non-MJ related crimes may be presented unless extra data is pulled.
+
+The link of data set is as follows:
+<https://www.kaggle.com/datasets/jinbonnie/crime-and-weed>
+
+### Where does the data come from, how was it collected?
+<div style="max-width:1000px; text-align: justify;"> Data in this file are crimes reported to the Denver Police Department which, upon review, were determined to have clear connection or relation to marijuana. These data do not include police reports for violations restricting the possession, sale, and/or cultivation of marijuana. This dataset is based upon the National Incident Based Reporting System (NIBRS) which includes all victims of person crimes and all crimes within an incident. The data is dynamic, which allows for additions, deletions and/or modifications at any time, resulting in more accurate information in the database. Due to continuous data entry, the number of records in subsequent extractions are subject to change.</div>
+
+
+#### To Start our project, first we import the packages and our data set.
+
+```{python packages}
+import warnings
+warnings.filterwarnings('ignore') 
+from statsmodels.tools.sm_exceptions import ConvergenceWarning
+warnings.simplefilter('ignore', ConvergenceWarning)
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn import preprocessing
+from sklearn.linear_model import LogisticRegression
+from imblearn.over_sampling import SMOTE
+import statsmodels.api as sm
+
+rawdf = pd.read_csv("crime_marijuana.csv")
+rawdf.head()
+```
+
+
+## Analysis
+<!--
+In this section: 
+Text describing the steps of analysis and some well crafted code chunks with visualization(s) and a statistical analysis that assesses the research questions.
+-->
+### Cleaning the dataset  
+<div style="max-width:1000px; text-align: justify;"> In order to do the exploratory data analysis (EDA), we check the types of variables and the missing values.
+Our data set has 6 numerical and 8 string variables. We have 3 string variables which should be converted into *Date Type*.
+We have one missing value in **'GEO_X'**, one missing value in **'GEO_Y'** and 338 missing values in **LAST_OCCURENCE_DATE**. So we need to make a decision for the missing values of this variable.
+ Based on the data set documentation, the **LAST_OCCURENCE_DATE** is basically same as the happened date.
+Apart from the NaN values, only in 127 cases the **LAST_OCCURENCE_DATE** does not match the **FIRST_OCCURENCE_DATE**.
+As witnessed by area-specific knowledge analysis, the types of the crimes where the **FIRST_OCCURENCE_DATE** does not match the **LAST_OCCURENCE_DATE** are mostly non continuous by nature (e. g. burglaries, robberies, thefts etc.). Moreover, only in 30 cases the **LAST_OCCURENCE_DATE** is not equal to the **FIRST_OCCURENCE_DATE** and **REPORT_DATE** at the same time. This means that non-matching values are more likely to be simple errors that to be caused by actual lack of information. At least the remainder, where the mismatch may indeed be informative, is not really large and cannot be extrapolated. Ergo we can replace these missing data with **FIRST_OCCURENCE_DATE**.</div>
+After filling the NaN values of *LAST_OCCURENCE_DATE*, we drop the rows where we have missing value in **'GEO_X'** and **'GEO_Y'**.
+
+```{python Variable Type}
+rawdf.info()
+print(rawdf.isnull().sum())
+```
+<div style="max-width:1000px; text-align: justify;">We have one missing value in **'GEO_X'**, one missing value in **'GEO_Y'** and 338 missing values in **LAST_OCCURENCE_DATE**. So we need to make a decision for the missing values of this variable.
+Based on the data set documentation, the **LAST_OCCURENCE_DATE** is basically same as the happened date. But why should we believe that is true?</div>
+
+```{python identifying the missing values}
+print(rawdf[rawdf['FIRST_OCCURENCE_DATE'] != rawdf['LAST_OCCURENCE_DATE']]['LAST_OCCURENCE_DATE'].count())  
+print(rawdf[rawdf['FIRST_OCCURENCE_DATE'] != rawdf['LAST_OCCURENCE_DATE']]['OFFENSE_TYPE_ID'].value_counts())
+print(rawdf[rawdf['FIRST_OCCURENCE_DATE'] != rawdf['LAST_OCCURENCE_DATE']][rawdf['LAST_OCCURENCE_DATE']!=rawdf['REPORTDATE']].dropna(axis=0).count())      
+```
+
+<div style="max-width:1000px; text-align: justify;"> So we see that the **LAST_OCCURENCE_DATE** does not match the **FIRST_OCCURENCE_DATE** not only if it is None, but in 127 more cases. What the nature of these mismatches might be?
+As witnessed by area-specific knowledge analysis, the types of the crimes where the **FIRST_OCCURENCE_DATE** does not match the **LAST_OCCURENCE_DATE** are mostly not continuous by nature (e. g. burglaries, robberies, thefts etc.). Moreover, in 30 cases only the **LAST_OCCURENCE_DATE** does not equal **FIRST_OCCURENCE_DATE** and **REPORT_DATE** at the same time. This means that non-matching values are more likely to be simple errors that to be caused by actual lack of information. At least the remainder, where the mismatch may indeed be informative, is not really large and cannot be extrapolated. Ergo we can replace these missing data with **FIRST_OCCURENCE_DATE**.</div>
+
+```{python Filling the missing values}
+df = rawdf.copy()
+df['LAST_OCCURENCE_DATE'] = df['LAST_OCCURENCE_DATE'].fillna(df['FIRST_OCCURENCE_DATE'])
+print(df.isnull().sum())
+```
+
+Now we drop the rows where we have missing value in **'GEO_X'** and **'GEO_Y'**  
+```{python drop rows with missing values}
+df = df.dropna()
+print(df.isnull().sum())
+df.shape
+```
+
+### Working with time series
+<div style="max-width:1000px; text-align: justify;">In order to use the time series, we need to change the type of date variables into date.
+As it was mentioned earlier, we have 3 date variables but their type is string. In order to use the time series, we need to change the type of these variables.</div>
+After changing the type, we added 5 new variables into our data set.
+Then we visualised the yearly trend of the number of crimes. In year 2020, we only have 19 data for the month *January*.
+
+```{python Working with time series}
+FOD_series = pd.Series(data = [item.split("-")[0] + "-" + item.split("-")[1] + "-" + item.split("-")[2] for item in df['FIRST_OCCURENCE_DATE']], index=df.index)
+RD_series = pd.Series(data = [item.split("-")[0] + "-" + item.split("-")[1] + "-" + item.split("-")[2] for item in df['REPORTDATE']], index=df.index)
+LOD_series = pd.Series(data = [item.split("-")[0] + "-" + item.split("-")[1] + "-" + item.split("-")[2] for item in df['LAST_OCCURENCE_DATE']], index=df.index)
+FOD_series = pd.to_datetime(FOD_series)
+LOD_series = pd.to_datetime(LOD_series)
+RD_series = pd.to_datetime(RD_series)
+df.drop(['FIRST_OCCURENCE_DATE' , 'LAST_OCCURENCE_DATE','REPORTDATE'], axis = 1, inplace = True)
+df.insert(loc=0, column ='first_occurence_date', value= FOD_series)
+df.insert(loc=1, column ='last_occurence_date', value= LOD_series)
+df.insert(loc=2, column = 'reported_date' , value = RD_series)
+
+year_series = FOD_series.dt.year # Getting year values
+month_series = FOD_series.dt.month # Getting month values
+day_series = FOD_series.dt.day # Getting day values as integers
+day_name_series = FOD_series.dt.day_name() # Getting the days of a week, i.e., Monday, Tuesday, Wednesday etc.
+
+# Add the 'Year', 'Month', 'Day' and 'Day Name' columns to the DataFrame.
+df['Year'] = year_series
+df['Month'] = month_series
+df['Day'] = day_series
+df['Day Name'] = day_name_series
+
+# Creating the duration variable
+duration =(df['last_occurence_date']-df['first_occurence_date'])
+duration = duration.apply(lambda x: x.days)
+df.insert(loc=4, column='duration', value = duration)
+```
+
+### Visualisation on the map
+
+<div style="max-width:1000px; text-align: justify;"> The problem with this dataset is no long-lat coordinates. Instead we have SPC (state plane coordinates). In the following, we transform the data and map the location of crimes on the map of the Denver. Then we create a new variable named **dist** which is the distance of occurance place from the city center. </div>
+
+```{python Formatting lat and long variables}
+from pyproj import Proj, transform
+from pyproj import CRS ,Transformer
+transformer = Transformer.from_crs(2232, 4326)
+
+df['lat'] = df.apply(lambda x  : transformer.transform(x.GEO_X,x.GEO_Y)[0],axis=1)
+df['long'] = df.apply(lambda x  : transformer.transform(x.GEO_X,x.GEO_Y)[1],axis=1)
+```
+
+fig1. This is the way the crimes are located in comparison to each other. More informative maps will follow.
+
+```{python Mutual location of the crimes}
+fig,ax = plt.subplots()
+ax.plot(df['long'],df['lat'],'r+')
+plt.show()
+```
+
+fig2. We use these bounds from BBox to export a picture of the streets of denver from openstreetmaps. It is a fast and easy way to get an overview. Then we import the picture and plot the data points within this picture.
+
+```{python Putting the crime onto the map}
+BBox = np.append(ax.get_xlim(),      
+         ax.get_ylim())
+print(BBox)
+denmap = plt.imread('map.png')
+plt.figure(figsize=(8, 8))
+plt.imshow(denmap, zorder=0, extent = BBox, aspect= 'equal')
+plt.plot(df.long,df.lat,'r+')
+plt.show() 
+```
+
+Based on above map, it is evident that the majority of crimes are occuring in the middle of the city and in some areas like the South-East or North-west have less crimes than other parts. 
+
+In addition, we define a new variable which is called "dist" and we calculate the distance of the crime from the city center by it:
+
+```{python Adding the distance to the center}
+from math import radians,cos, sin, asin, acos, sqrt, atan2
+centerlat = 39.7392
+centerlong = -104.9903
+def calculate_spherical_distance(lat,long):
+    # Convert degrees to radians
+    coordinates = lat, long, centerlat, centerlong
+    phi1, lambda1, phi2, lambda2 = [radians(c) for c in coordinates]
+    # Apply the haversine formula
+    a = sin((phi2-phi1)/2)**2 + cos(phi1) * cos(phi2) * sin((lambda2-lambda1)/2)**2
+    d = 2*6371*atan2(sqrt(a),sqrt(1-a))
+    return d
+df['dist'] = df.apply(lambda x: calculate_spherical_distance(x['lat'], x['long']), axis=1)
+df['dist'].describe()
+```
+
+### Adding an additional label column
+In forensic sciences, a major distinction is made between violent and non-violent crimes. Let us label the offences as violent or not.
+
+```{python v/nv labelling}
+def labeller(string):
+  violent = 'violent'
+  nonviolent = 'non-violent'
+  vcrimes = ['ASLT', 'ASSAULT', 'ROBBERY', 'THREATS TO INJURE', 'BY FORCE', 'KIDNAP', 'ARSON', 'W/ FORCE', 'MENACING', 'CAR JACKING']
+  label = nonviolent
+  for item in vcrimes:
+    if item in string:
+      label = violent
+  if 'NO FORCE' in string:
+    label = nonviolent
+  return label
+df['VIOLENCE_RELATION']=df['OFFENSE_TYPE_ID'].apply(labeller)
+```
+
+### Visualisation
+
+#### Geographycal issues
+
+To begin with, let us look at offence categories on the map
+
+```{python visualisation Regarding offence category}
+sns.lmplot( x='GEO_X', y='GEO_Y', data=df, fit_reg = False, hue='OFFENSE_CATEGORY_ID', palette="Set1", legend=False)
+plt.legend(bbox_to_anchor=(1.7, 1), loc='upper right')
+plt.show()
+```
+
+fig3. This seems to be distributed more or leass equally without any apparent tendency. 
+
+Next, let us see the MJ relation type on the map:
+
+```{python visualisation Regarding MJ relation type}
+sns.scatterplot( x='GEO_X', y='GEO_Y', data=df, size='MJ_RELATION_TYPE',sizes=(10,100), alpha = 0.2)
+plt.legend(['Non-Industry', 'Industry'], loc='lower right')
+plt.show()
+```
+
+fig4. Similar to previous graph, there is not an apperent tendency here. However, we can see for GEO-X more than 3.19 and GEO-Y more than 1.72, Industry crimes did not occur.
+
+Finally, observe violent and non-violent crimes on the map
+
+```{python visualisation Regarding violence category}
+sns.lmplot( x='GEO_X', y='GEO_Y', data=df, fit_reg = False, hue='VIOLENCE_RELATION', palette="Set1", legend=False)
+plt.legend(loc='lower right')
+plt.show()
+```
+
+fig5. From this map, it is evident that the majority of violent and non-violent crimes were committed between 3.14 to 3.16 in GEO-X. But they are distributed in a wider range of GEO-Y (1.67 to 1.71).
+
+#### Visualizaion of crime categories
+
+To begin with, let us observe the offence categories distribution
+```{python Barchart for offence categories}
+ax = sns.countplot(y=df['OFFENSE_CATEGORY_ID'], order = df['OFFENSE_CATEGORY_ID'].value_counts().index, orient ='h')
+plt.show()
+```
+
+fig6. At the first glance, we can see the most of the crimes are Burglary offences (almost 700) and Larceny, Robbery-street-Res and criminal-Mischief-Property are 150, 100, 90 respectively.
+
+Apart from offence categories, we also have offence types (being more specific and consequently more numerous). 
+We will not observe it because there are too many, and vast majority of them have a very few observtions.
+
+```{python Barchart for MJ relation types}
+ax = sns.countplot(data = df, x=df.MJ_RELATION_TYPE)
+ax.set_xticks(range(0, len(df.MJ_RELATION_TYPE.unique())))
+ax.set_xticklabels(labels = ['Non-Industry', 'Industry'])
+plt.show()
+```
+
+fig7. Based on above barchart, the number of industry MJ-crimes is about four times more than of non-industrial.
+
+```{python Barchart for violence relation types}
+ax = sns.countplot(data = df, x=df['VIOLENCE_RELATION'])
+ax.set_xticks(range(0, len(df['VIOLENCE_RELATION'].unique())))
+ax.set_xticklabels(labels = df['VIOLENCE_RELATION'].unique())
+plt.show()
+```
+
+fig8. We can see, the number of violent crimes is twice the number of non-violent crimes.
+
+#### Trend of MJ Crime over the time
+
+Another important topic that we have to consider is analysing the main variables trend over the time. For doing that, first of all, we define some variables related to time and then visualise the yearly trend of crimes.
+
+```{python number of MJ-crimes over the years}
+Yearlabels = ['2015','2016','2017', '2018', '2019']
+df['Year'].unique()
+df_2015 = df.loc[df['Year']==2015]
+df_2016 = df.loc[df['Year']==2016]
+df_2017 = df.loc[df['Year']==2017]
+df_2018 = df.loc[df['Year']==2018]
+df_2019 = df.loc[df['Year']==2019]
+
+plt.figure(figsize=(15, 5))
+plt.title('Yearly Trend of number of Crimes per Month')
+plt.plot(df_2015['Month'].sort_values().unique().reshape(-1,1), df_2015.groupby('Month',as_index=False).count()['OFFENSE_CATEGORY_ID'], 'g-o',label='2015')
+plt.plot(df_2016['Month'].sort_values().unique().reshape(-1,1), df_2016.groupby('Month',as_index=False).count()['OFFENSE_CATEGORY_ID'], 'b-s',label='2016')
+plt.plot(df_2017['Month'].sort_values().unique().reshape(-1,1), df_2017.groupby('Month',as_index=False).count()['OFFENSE_CATEGORY_ID'], 'k-^',label='2017')
+plt.plot(df_2018['Month'].sort_values().unique().reshape(-1,1), df_2018.groupby('Month',as_index=False).count()['OFFENSE_CATEGORY_ID'], 'r--+',label='2018')
+plt.plot(df_2019['Month'].sort_values().unique().reshape(-1,1), df_2019.groupby('Month',as_index=False).count()['OFFENSE_CATEGORY_ID'], 'y-o',label='2019')
+plt.xlabel('Month')
+plt.ylabel('Number of Crimes')
+plt.legend(bbox_to_anchor=(1, 1), loc='upper right')
+plt.grid(True)
+plt.show()
+```
+
+<div style="max-width:1000px; text-align: justify;"> fig9. At first glance, it is evident that during the year there is fluctuation behavavior for distinct years. Whereas, in some months the general trend can be observed in number of crimes. For instance, in August there is a sudden increase for almost all years. In addition, except 2018, in all of the years, a dramatic drop for the number of crimes can be seen from September to October or November to December.</div>
+
+##### Trend of violent and non-violent crime over the time
+
+In 2020, we only have data of January and thats why the number of crimes are less than others. The plot shows that the number of violent crimes in each year is more than the number of non-violent ones.
+
+```{python v or n-v over the years}
+plt.figure(figsize=(5,5))
+valuetable = pd.crosstab(df[df.Year!=2020]['Year'],df['VIOLENCE_RELATION']) # ,normalize='index'
+valuetable.plot.bar(stacked=True)
+plt.title('Yearly Trend')
+plt.xticks(rotation='horizontal')
+plt.xlabel('Year')
+plt.ylabel('count')
+order = [0,1]
+handles =['Non-violent', 'Violent']
+plt.legend(bbox_to_anchor=(1, 1), loc='upper right', labels=['Non-violent', 'Violent'])
+plt.show()
+```
+
+fig10. Above stacked barplot can show us the number of violent crimes is more than non-violent crimes which is already clear. The proportion of violent and non-violent crimes also seems to be roughly the same.
+
+```{python v or n-v over the months}
+Monthlabels = ['January','February','March','April','May','June','July','August', 'September', 'October', 'November', 'December']
+Monthtickorder = list(list(df['Month'].unique())[i]-1 for i in range(0, 12))
+Monthtickorder.sort()
+plt.figure(figsize=(5,5))
+valuetable = pd.crosstab(df[df.Year!=2020]['Month'],df['VIOLENCE_RELATION']) # ,normalize='index'
+valuetable.plot.bar(stacked=True)
+plt.title('Monthly Trend')
+plt.xticks(ticks=Monthtickorder, labels=Monthlabels)
+plt.xlabel('Month')
+plt.ylabel('count')
+plt.legend(bbox_to_anchor=(1.01, 1), loc='upper right', labels=['Non-violent', 'Violent'])
+plt.show()
+```
+
+<div style="max-width:1000px; text-align: justify;"> fig11. Trend of violent and non-violent crimes over the months illustrates that from June to September the number of violent and non-violent crimes increased steadily. While, in other months, the trend fluctuated. The proportion is indeed different.</div>
+
+```{python v or n-v over the days}
+Daylabels = ['Monday', 'Tuesday','Wednesday', 'Thursday', 'Friday','Saturday', 'Sunday']
+valuetable = pd.crosstab(df['Day Name'],df['VIOLENCE_RELATION']).reset_index()
+valuetable.set_index('Day Name', inplace = True)
+valuetable = valuetable.reindex(Daylabels).reset_index()
+valuetable.plot.bar(stacked=True)
+plt.title('Daily Trend')
+plt.xlabel('Day of Week')
+plt.ylabel('count')
+plt.legend(bbox_to_anchor=(1.01, 1), loc='upper right', labels=['Non-violent', 'Violent'])
+plt.xticks(ticks=range(0, 7), labels=Daylabels, rotation=0, fontsize=9)
+plt.show()
+```
+
+fig12. The number of violent crimes between Tuesday and Thursday is more than other days. At the same time the proportions seems to be different for working and non-working days.
+
+##### Trend of industry and non-industry crimes over the time
+
+```{python MJ relation type over the years}
+plt.figure(figsize=(5,5))
+valuetable = pd.crosstab(df[df.Year!=2020]['Year'],df['MJ_RELATION_TYPE'])
+valuetable.plot.bar(stacked=True, color = ['#ff7f0e', '#1f77b4'])
+plt.title('Yearly Trend')
+plt.xticks(rotation='horizontal')
+plt.xlabel('Year')
+plt.ylabel('count')
+order = [0,1]
+handles, labels = plt.gca().get_legend_handles_labels()
+plt.legend(handles = [handles[i-1] for i in order], bbox_to_anchor=(1, 1), loc='upper right', labels=['Non-Industry', 'Industry'])
+plt.show()
+```
+
+fig13. We can observe that the number of non-industry crimes had decreased gradually. The proportion of non-industry crimes was decreasing all the way long.
+
+```{python MJ relation type over the months}
+Monthlabels = ['January','February','March','April','May','June','July','August', 'September', 'October', 'November', 'December']
+Monthtickorder = list(list(df['Month'].unique())[i]-1 for i in range(0, 12))
+Monthtickorder.sort()
+plt.figure(figsize=(5,5))
+valuetable = pd.crosstab(df[df.Year!=2020]['Month'],df.MJ_RELATION_TYPE)
+valuetable.plot.bar(stacked=True, color = ['#ff7f0e', '#1f77b4'])
+plt.title('Monthly Trend')
+plt.xticks(ticks=Monthtickorder, labels=Monthlabels)
+plt.xlabel('Month')
+plt.ylabel('count')
+plt.legend(handles = [handles[i-1] for i in order], bbox_to_anchor=(1, 1), loc='upper left', labels=['Non-Industry', 'Industry'])
+plt.show()
+```
+
+fig14. Similar to violent and non-violent crimes, the proportion over months differs greatly. Compare, for instance, October and December.
+
+```{python MJ relation type over the days}
+valuetable = pd.crosstab(df['Day Name'],df['MJ_RELATION_TYPE']).reset_index()
+valuetable.set_index('Day Name', inplace = True)
+valuetable = valuetable.reindex(Daylabels).reset_index()
+valuetable.plot.bar(stacked=True, color = ['#ff7f0e', '#1f77b4'])
+plt.title('Daily Trend')
+plt.xlabel('Day of Week')
+plt.ylabel('count')
+plt.legend(handles = [handles[i-1] for i in order], bbox_to_anchor=(1.01, 1), loc='upper right', labels=['Non-Industry', 'Industry'])
+plt.xticks(ticks=range(0, 7), labels=Daylabels, rotation=0, fontsize=9)
+plt.show()
+```
+
+fig15. The split between the weekend and the rest of the week is no as obvious as it was at the respective violent/non-violent bar chart.
+
+
+##### Plots concerning offence categories
+
+We will be using ceategories (not types) as there are way less categories than types, so a conclusion may be more generalized.
+For the next plot we should note that only four principal crime categories (burglary, larceny, street robbery and property mischief). The rest of the crimes have a few observations, and when it is so a trend shown is not that informative.
+
+```{python categories over the years}
+df_burglary = df.loc[df['OFFENSE_CATEGORY_ID']=='Burglary'][df['Year']!=2020]
+df_larceny = df.loc[df['OFFENSE_CATEGORY_ID']=='Larceny'][df['Year']!=2020]
+df_rsr = df.loc[df['OFFENSE_CATEGORY_ID']=='Robbery-Street-Res'][df['Year']!=2020]
+df_mischief = df.loc[df['OFFENSE_CATEGORY_ID']=='Criminal Mischief-Property'][df['Year']!=2020]
+Yearlabels = list(df_larceny.Year.unique())
+Yearlabels.sort()
+
+fig, (ax2, ax1) = plt.subplots(2, 1, sharex=True, figsize=(15, 5))
+
+ax2.set_title('Trend of Number of Most Numerous Crime Types through Years')
+ax2.set_ylim(85,200)
+ax2.xaxis.set_ticks_position('none') 
+ax2.spines.bottom.set_visible(False)
+
+ax2.plot(df_burglary['Year'].sort_values().unique().reshape(-1,1), df_burglary.groupby('Year',as_index=False).count()['OFFENSE_CATEGORY_ID'], 'g-o',label='Burglary')
+ax1.plot(df_larceny['Year'].sort_values().unique().reshape(-1,1), df_larceny.groupby('Year',as_index=False).count()['OFFENSE_CATEGORY_ID'], 'b-s',label='Larceny')
+ax1.plot(df_rsr['Year'].sort_values().unique().reshape(-1,1), df_rsr.groupby('Year',as_index=False).count()['OFFENSE_CATEGORY_ID'], 'k-^',label='Robbery-Street-Res')
+ax1.plot(df_mischief['Year'].sort_values().unique().reshape(-1,1), df_mischief.groupby('Year',as_index=False).count()['OFFENSE_CATEGORY_ID'], 'r--+',label='Criminal Mischief-Property')
+ax1.set_xlabel('Year')
+ax1.set_xticks(ticks=Yearlabels)
+ax1.set_xticklabels(labels=Yearlabels)
+ax1.set_ylim(ymax=35)
+ax1.set_ylabel('Number of Crimes')
+ax1.spines.top.set_visible(False)
+ax1.xaxis.tick_bottom()
+
+d = .5
+kwargs = dict(marker=[(-1, -d), (1, d)], markersize=12,
+              linestyle="none", color='k', mec='k', mew=1, clip_on=False)
+ax2.plot([0, 1], [0, 0], transform=ax2.transAxes, **kwargs)
+ax1.plot([0, 1], [1, 1], transform=ax1.transAxes, **kwargs)
+
+fig.subplots_adjust(top=0.9)
+fig.legend(bbox_to_anchor=(1, 1), loc='upper right')
+plt.show()
+```
+
+fig16. In 2016 Denver experienced a gradual rise in the number of burglary crimes. However, in the same time duration the number of crimes had decreased or remained stable. In addition, the number of all kind of crimes (except Robbery-street-Res) rose again by 2018 and then in all the years a decrease trend can be observed.
+
+```{python categories over the months}
+ax = sns.histplot(data = df, hue='Month', y = 'OFFENSE_CATEGORY_ID', palette = 'tab10', alpha=1)
+ax.legend(labels=Monthlabels)
+plt.show()
+```
+
+fig17. Here we should note that the bars are not stacked: the left-most section represents the least criminal month. So we may notice that there are some months (April, May, December, July) that win in different crimes. This displays a variance of crime types we have in the dataset.
+
+For plotting over weekdays we again get the four most frequent crimes, otherwise the plot is hard to grasp.
+
+```{python categories over the days}
+filtered_df = df.loc[df['OFFENSE_CATEGORY_ID'].isin(['Burglary', 'Larceny', 'Criminal Mischief-Property', 'Robbery-Street-Res'])]
+ax = sns.countplot(data = filtered_df , hue='Day Name', y = 'OFFENSE_CATEGORY_ID', hue_order = Daylabels, alpha=1, orient = 'v')
+ax.legend(labels = Daylabels)
+plt.show()
+```
+
+<div style="max-width:1000px; text-align: justify;"> fig18. The majority of Burglary crimes are occured on Tuesday and Thursday. Whereas, larceny crimes often are happened on Thursday and for Robbery-Street-Res and Criminal-Mischief-crimes, Sunday has the most numerous crimes. As it was true for months, there is no unique leader, many weekdays win for different crime types.</div>
+
+
+Not let us turn the picture and plot proportion of crime types over time units.
+The graph over the years was tried and appeared to be too boring, so we went straight to months.
+
+```{python categories in months}
+plt.figure(figsize=(5,5))
+valuetable = pd.crosstab(filtered_df[filtered_df['Year']!=2020]['Month'],filtered_df['OFFENSE_CATEGORY_ID'])
+valuetable.plot.bar(stacked=True)
+plt.title('Monthly Trend')
+plt.xlabel('Month')
+plt.ylabel('count')
+plt.xticks(ticks=Monthtickorder, labels=Monthlabels)
+plt.legend(bbox_to_anchor=(1.5, 1), loc='upper right')
+plt.show()
+```
+
+fig19. First we remind that all years except 2020 were considered. Based on the plot, in August the proportion of buglaries incresed. This of April seems to be higher in January, June was famous for street robberies and property mischief was more frequent in September.
+
+```{python categories in days}
+valuetable = pd.crosstab(filtered_df['Day Name'],filtered_df['OFFENSE_CATEGORY_ID']).reset_index()
+valuetable.set_index('Day Name', inplace = True)
+valuetable = valuetable.reindex(Daylabels).reset_index()
+valuetable.plot.bar(stacked=True)
+plt.title('Daily Trend')
+plt.xlabel('Day of Week')
+plt.ylabel('count')
+plt.legend(bbox_to_anchor=(1.1, 1.15), loc='upper right', labels=['Burglary', 'Criminal Mischief-Property', 'Larceny', 'Robbery-Street-Res'])
+plt.xticks(ticks=range(0, 7), labels=Daylabels, rotation=0, fontsize=9)
+plt.show()
+```
+
+fig20. Similar to fig7. this chart shows the trend of most numerous crimes over the weekdays. Here the main surprise is a very distinguished proportion for Sunday unlike any other weekday.
+
+##### Relation between MJ relation type and distance
+
+We finalize our visualization pert by some extra plots concerning our target variabe- MJ relation type. Particularly we wanted to visualize its possible links to distance from the center ('dist' variable).
+
+Firstly, we plot the 'dist' variable itself to know its structure better.
+
+```{python dist studied}
+plt.figure(figsize=(10,3))
+plt.subplot(121)
+plt.hist(np.array(df['dist']) , density=True , bins=50, edgecolor='black' ,facecolor='pink', alpha=0.75)
+plt.xlabel('Value', fontsize= 10)
+plt.ylabel('Frequency', fontsize= 10)
+plt.subplot(122)
+sns.boxplot(y ='dist', data=df,palette="Blues")
+plt.xlabel('dist')
+plt.show()
+```
+
+fig21. By using the boxplot we can show the various measures and in particular the measures of position of a distribution or compare variables by different distributions. Here it shows that the mean of the 'dist' is at around 5 km away from the city center and that outliers are more than 5 times higher that the median. Moreover, we notice a narrow IQR which means that majoritry of crimes is committed between 3.5-6.5 km from the city center. The histogram confirms this conclusion.
+
+Secondly, we plot 'dist' against the target value:
+
+```{python dist and MJ relation type}
+plt.figure(figsize=(6, 6))
+sns.boxplot(x='MJ_RELATION_TYPE', y='dist', data=df)
+plt.xticks(ticks = [0, 1], labels = ['Non-industry', 'Industry'])
+plt.show()
+```
+
+<div style="max-width:1000px; text-align: justify;"> fig22.  As we can see, based on this chart, for non-industry crimes, variability of distance from city center is more than industry crimes. However, both of them have the same median (around 5). Number of outliers for Non-Industry crimes are more than Industry crimes and are from 17-27 kilometer approximately from city center. The IQR of the industrial crimes is narrower, so we conclude that locale of these crimes is not as spread as of non-industrial.</div>
+
+
+### Analysis of correlation
+
+<div style="max-width:1000px; text-align: justify;"> Correlation matrices need to be composed for two purposes. Firstly, they may be useful for identifying interesting coincidences between the variables (which, however, does not imply any causation); secondly, it will be useful to hunt for collinearity that may influence the ML-models.
+However, we have a very long dataframe, that is why the correlation matrix is very large. Instead of visualizing it, we rather get top-30 most correlated and anti-correlated variables as a dataframe.</div>
+
+```{python correlation init}
+corrdf = df[['MJ_RELATION_TYPE', 'lat', 'long', 'DISTRICT_ID', 'OFFENSE_CATEGORY_ID',
+'NEIGHBORHOOD_ID', 'Month', 'Day Name',  'VIOLENCE_RELATION', 'dist', 'duration']]
+corrdf = pd.get_dummies(data=corrdf, drop_first=True, columns=['DISTRICT_ID', 'OFFENSE_CATEGORY_ID',
+'NEIGHBORHOOD_ID', 'Month', 'Day Name',  'VIOLENCE_RELATION', 'MJ_RELATION_TYPE'])
+
+def get_top_abs_correlations(df, n=30, geography_only=False):
+    '''Tune n to change the number of top correlations'''
+    au_corr = df.corr(method='spearman').unstack()
+    au_corr = au_corr.sort_values(ascending=False)
+    au_corr = au_corr.to_frame().reset_index()
+    au_corr = au_corr[au_corr[0]!=1]
+    au_corr.drop_duplicates(subset=0, inplace = True)
+    au_corr.rename(columns={'level_0': 'Value1', 'level_1': 'Value2', 0:'Correlation_coef'}, inplace=True)
+
+    if geography_only:   
+        au_corr = au_corr[abs(au_corr.Correlation_coef)>0.1] #filter insignificant correlations
+        #filter the correlation df for pairs composed of ('NEIGHBORHOOD_ID','DISTRICT_ID', 'OFFENSE_CATEGORY_ID', 'lat', 'long')
+        au_corr =  au_corr[au_corr.Value1.str.startswith(('NEIGHBORHOOD_ID','DISTRICT_ID', 'OFFENSE_CATEGORY_ID', 'lat', 'long', 'dist'))]
+        au_corr =  au_corr[au_corr.Value2.str.startswith(('NEIGHBORHOOD_ID','DISTRICT_ID', 'OFFENSE_CATEGORY_ID', 'lat', 'long', 'dist'))]
+        #get the part where the first column is geographical and the second is offense category
+        au_corr1 = au_corr[au_corr.Value1.str.startswith(('NEIGHBORHOOD_ID','DISTRICT_ID','lat', 'long', 'dist'))]
+        au_corr1 = au_corr1[au_corr1.Value2.str.startswith(('OFFENSE_CATEGORY_ID'))]
+        #get the part where the first column is offense category and the second is geographical 
+        au_corr2 =  au_corr[au_corr.Value1.str.startswith(('OFFENSE_CATEGORY_ID'))]
+        au_corr2 = au_corr2[au_corr.Value2.str.startswith(('NEIGHBORHOOD_ID','DISTRICT_ID','lat', 'long', 'dist'))]
+        #concatenate the two parts
+        au_corr = pd.concat([au_corr1, au_corr2])
+        
+    else:
+        au_corr = pd.concat([au_corr.iloc[0:n, :], au_corr.iloc[len(au_corr)-1-n:len(au_corr)-1, :]], axis=0)
+    
+    au_corr = au_corr.sort_values(by='Correlation_coef', ascending=False)
+    return au_corr
+
+get_top_abs_correlations(corrdf)
+```
+
+<div style="max-width:1000px; text-align: justify;"> So the highest correlation we see is between geographycal variables. As for the rest, we may highlight strong positive correlation between violence and being burglary, the opposite for being larceny; between being street robbery and being non-industrial crime, the opposite - for being burglary.
+We also see that the dataset does not have a plenty of highly correlated values (i. e. with absolute value over 0.6). Yes, there are some, but it is not that much for >100 variables.</div>
+
+With regard to question 1, we also need to look at correlations between offence types and geographycal variables. Let's do this by filtering the correlation df.
+
+```{python category-geo correlation}
+get_top_abs_correlations(corrdf, geography_only=True)
+```
+
+ <div style="max-width:1000px; text-align: justify;"> Some hoods correlate with some crimes positively: positive correlation exists between business robberies and Hale neigborhood, aggravated assault and 6th district, theft from motor vehicle and 7the district, Speer neighbourhood and graffity offences.</div>
+ The only outstanding negative correlation is between burglary and 6th district. 
+ Absolute valus of the rest of the correlations are below 0.15.
+
+ As a result, we have got a dataset with a few collinearity issues. 
+
+### Machine learning focused on geographycal predictors
+
+Given the number of predictors, let us first try a random forest classifier. Moreover, this type of model is not sensitive to unscaled data.
+<div style="max-width:1000px; text-align: justify;"> We will first attempt using maximum of the predictors (dropping, however, OFFENSE_TYPE_ID in any event). Then we get a feature importance ranking and performance results aining at minimizing number of predictors and finding optimal features of the classifier. </div>
+
+```{python random forest init}
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.ensemble import RandomForestClassifier
+from sklearn import metrics
+modeldf = df[['MJ_RELATION_TYPE', 'lat', 'long', 'DISTRICT_ID', 'OFFENSE_CATEGORY_ID',
+'NEIGHBORHOOD_ID', 'Month', 'Day Name',  'VIOLENCE_RELATION', 'dist', 'duration']]
+modeldf = pd.get_dummies(data=modeldf, drop_first=True, columns=['DISTRICT_ID', 'OFFENSE_CATEGORY_ID', 'NEIGHBORHOOD_ID', 'Month', 'Day Name',  'VIOLENCE_RELATION'])
+modeldf.MJ_RELATION_TYPE = modeldf.MJ_RELATION_TYPE.apply(lambda x : 1 if (x == 'INDUSTRY\r') else 0)
+
+def rf_model_assessment(predictors, target, outofbag=True, plot = True, maxdepth=None,
+output1=True, output2 = False, nestimators=100, maxsamples=None, maxfeatures='sqrt', plottop=10):
+    '''The function to plug different data into slightly less different RF-models'''
+    
+    x_train, x_test, y_train, y_test = train_test_split(predictors, target, test_size=0.25, random_state=15)
+    os = SMOTE(random_state=0)
+    os_data_X,os_data_y=os.fit_resample(x_train, y_train)
+    x_train = pd.DataFrame(data=os_data_X,columns=x_train.columns)
+    y_train = pd.DataFrame(data=os_data_y)
+    clf = RandomForestClassifier(oob_score=outofbag, max_depth=maxdepth, n_estimators=nestimators, max_samples=maxsamples, max_features=maxfeatures)
+    clf.fit(x_train, y_train)
+
+    if plot ==True:
+        fidf = pd.DataFrame({'Feature': [], 'Feature importance score':[]})
+        fidf.Feature=x_train.columns
+        fidf['Feature importance score']=clf.feature_importances_
+        fidf=fidf.sort_values('Feature importance score', ascending=False)
+        fidf=fidf.iloc[:plottop, :]
+        ax=sns.barplot(y=fidf.Feature, x=fidf['Feature importance score'], orient='h')
+        ax.set_yticks(range(0, len(fidf.Feature)))
+        ax.set_yticklabels(labels=list(fidf.Feature))
+        plt.show()
+
+    yhatrain = clf.predict(x_train)
+    predictiontrain = list(yhatrain)
+    cmtrain = metrics.confusion_matrix(y_train, predictiontrain)
+    yhattest = clf.predict(x_test)
+    predictiontest = list(yhattest)
+    cmtest = metrics.confusion_matrix(y_test, predictiontest)
+
+    if output1==True:
+        print ("Train Confusion Matrix : \n", cmtrain, '\n')
+        print("Train Accuracy : ", metrics.accuracy_score(y_train, predictiontrain),
+        '\n')
+        print("Train f1-score : ", metrics.f1_score(y_train, predictiontrain), '\n')
+        print("Train Recall : ", metrics.recall_score(y_train, predictiontrain), '\n')
+        print("Train Precision : ", metrics.precision_score(y_train, predictiontrain), '\n')
+        print ("Test Confusion Matrix : \n", cmtest)
+        print("Test Accuracy : ", metrics.accuracy_score(y_test, predictiontest), '\n')
+        print("Test f1-score : ", metrics.f1_score(y_test, predictiontest), '\n')
+        print("Test Recall : ", metrics.recall_score(y_test, predictiontest), '\n')
+        print("Test Precision : ", metrics.precision_score(y_test, predictiontest), '\n')
+    
+    if output2==True:
+        return float(metrics.f1_score(y_test, predictiontest))
+
+rf_model_assessment(target=modeldf.MJ_RELATION_TYPE, predictors=modeldf.iloc[:, 1:])
+
+```
+
+fig23. The model performs not bad, geographycal variables are among the most important ones again. However, we should focus on geo predictors. However, we will not drop non-geo predictors only if their importance ranking is high, otherwise we assume they are not significant.
+
+```{python random forest geo predictors}
+rf_model_assessment(target=modeldf.MJ_RELATION_TYPE, predictors=modeldf.iloc[:, 3:].drop(labels=['VIOLENCE_RELATION_violent', 'OFFENSE_CATEGORY_ID_Burglary'], axis=1))
+```
+
+fig24. The performance is slightly worse, however, it is not a great cost for dropping such important predictors.
+
+The next thing we do is attempting dropping the most significant predictors again to decrease computational cost of the model
+
+```{python random forest geo predictors cleaned}
+rf_model_assessment(target=modeldf.MJ_RELATION_TYPE, 
+predictors=modeldf.iloc[:, 1:].drop(labels=['OFFENSE_CATEGORY_ID_Robbery-Street-Res',
+'VIOLENCE_RELATION_violent', 'OFFENSE_CATEGORY_ID_Burglary'], axis=1))
+```
+
+fig25. The performance is slightly worse again, but still acceptable. This time top-3 predictors are geographycal, but the model remains effective.
+
+<div style="max-width:1000px; text-align: justify;"> At this point we state the predictor subsetting reached a tolerable mark, and now it is time to tune parameters of the model.</div>
+The metric we will consider for this purpose will be f1-score because it comprises both precision and recall evaluation.
+We visualize the parameters vs. f1-score first and then use the best-fitting parameters to obtain the final model. 
+
+```{python random forest plots for f1-score}
+leest1 = []
+leest2 = []
+for i in range(1, 101, 1):
+    leest1.append(rf_model_assessment(predictors=modeldf.iloc[:, 1:].drop(labels=['OFFENSE_CATEGORY_ID_Robbery-Street-Res', 'VIOLENCE_RELATION_violent','OFFENSE_CATEGORY_ID_Burglary'], axis=1),
+    target=modeldf.MJ_RELATION_TYPE, plot = False, nestimators=i,
+    output1=False, output2 = True))
+    leest2.append(i)
+ax=sns.lineplot(x=leest2, y=leest1)
+ax.set_xticks(ticks = list(range(0, 110, 10)))
+ax.set_xlabel(xlabel='Number of trees')
+ax.set_ylabel(ylabel='F1-score')
+nestimators = leest2[leest1.index(max(leest1))]
+plt.show()
+
+leest1 = []
+leest2 = []
+for i in range(1, 50, 1):
+    leest1.append(rf_model_assessment(predictors=modeldf.iloc[:, 1:].drop(labels=['OFFENSE_CATEGORY_ID_Robbery-Street-Res', 'VIOLENCE_RELATION_violent', 'OFFENSE_CATEGORY_ID_Burglary'], axis=1),
+    target=modeldf.MJ_RELATION_TYPE, plot = False, maxdepth=i,
+    output1=False, output2 = True))
+    leest2.append(i)
+ax=sns.lineplot(x=leest2, y=leest1)
+ax.set_xticks(ticks = list(range(0, 55, 5)))
+ax.set_xlabel(xlabel='Maximum tree depth')
+ax.set_ylabel(ylabel='F1-score')
+maxdepth = leest2[leest1.index(max(leest1))]
+plt.show()
+
+
+leest1 = []
+leest2 = []
+for i in range(1, 50, 5):
+    leest1.append(rf_model_assessment(predictors=modeldf.iloc[:, 1:].drop(labels=['OFFENSE_CATEGORY_ID_Robbery-Street-Res', 'VIOLENCE_RELATION_violent', 'OFFENSE_CATEGORY_ID_Burglary'], axis=1),
+    target=modeldf.MJ_RELATION_TYPE, plot = False,
+    output1=False, output2 = True, maxfeatures=i))
+    leest2.append(i)
+ax=sns.lineplot(x=leest2, y=leest1)
+ax.set_xticks(ticks = list(range(0, 55, 5)))
+ax.set_xlabel(xlabel='Maximum features in tree')
+ax.set_ylabel(ylabel='F1-score')
+maxfeatures = leest2[leest1.index(max(leest1))]
+plt.show()
+```
+
+<div style="max-width:1000px; text-align: justify;"> fig.fig.26-28. Random forest classifier has a lot of parameters available, but we choose number of trees, tree depth and number of features included into each tree. Common issue of all the plots is absence of uniform trend which is typical for random forest algorithms.</div>
+
+```{python random forest geo final model}
+rf_model_assessment(target=modeldf.MJ_RELATION_TYPE, 
+predictors=modeldf.iloc[:, 1:].drop(labels=['OFFENSE_CATEGORY_ID_Robbery-Street-Res',
+'VIOLENCE_RELATION_violent', 'OFFENSE_CATEGORY_ID_Burglary'], axis=1),
+nestimators=nestimators, maxdepth=maxdepth, maxfeatures=maxfeatures)
+```
+
+<div style="max-width:1000px; text-align: justify;"> fig. 29. The model has not changed its focus on geo-predictors, the rest of the predictors have not promoted greately. The f1-score is now over 0.91, which is fairly high. 
+
+Due to limited interpretability issues of random forest models and desire to get an interpretable result, we now turn to logistic regression.
+The procedure for this will be as follows: first, we make a ROC-curve to compute the best classifition threshold considering the mean of train and test f1-scores (in  random forest train performance was almost perfect all the time, so there was no point in computing the mean). Then we use the threshold to improve the modell. All this is done alongside with predictor subsetting.</div>
+
+```{python logistic regression init}
+def lr_roc(predictors, target):
+    '''The function draws the ROC curve depending on the threshold we choose'''
+    predictors=sm.add_constant(predictors)
+    x_train, x_test, y_train, y_test = train_test_split(predictors, target, test_size=0.25, random_state=1)
+    columns = predictors.columns
+
+    os = SMOTE(random_state=0)
+    os_data_X,os_data_y=os.fit_resample(x_train, y_train)
+    x_train = pd.DataFrame(data=os_data_X,columns=columns)
+    x_train = preprocessing.normalize(x_train)
+    x_train = pd.DataFrame(data=x_train,columns=columns)
+    y_train = pd.DataFrame(data=os_data_y)
+    normalizer = preprocessing.Normalizer().fit(x_train)
+    x_test = normalizer.transform(x_test)
+
+    clf=sm.Logit(y_train, x_train).fit(method='bfgs')
+    yhattrain = clf.predict(x_train)
+    yhattest = clf.predict(x_test)
+    tpr=[]
+    fpr=[]
+    threscrit=[]
+    thres=[]
+        
+    for i in range(0,100,1):
+        predictiontrain = list(map(lambda x: 0 if x < (i/100) else 1, yhattrain))
+        predictiontest = list(map(lambda x: 0 if x < (i/100) else 1, yhattest))
+        cmtest = metrics.confusion_matrix(y_test, predictiontest)
+        precisiontrain = metrics.precision_score(y_train, predictiontrain)
+        precisiontest = metrics.precision_score(y_test, predictiontest)
+        recalltrain = metrics.recall_score(y_train, predictiontrain)
+        recalltest = metrics.recall_score(y_test, predictiontest)
+        tntest, fptest = cmtest.ravel()[[0,1]]
+        specificity = tntest / (tntest+fptest)
+        tpr.append(recalltest)
+        fpr.append(1-specificity)
+        thres.append(i/100)
+
+        if precisiontrain>0.7:
+            threscrit.append((metrics.f1_score(y_test, predictiontest)+metrics.f1_score(y_train, predictiontrain))/2)
+        else:
+            threscrit.append(0)
+               
+    ax1=sns.lineplot(x=fpr, y=tpr)
+    ax1.set_xticks(ticks = [z * 0.01 for z in range(0, 110, 10)])
+    ax1.set_yticks(ticks = [z * 0.01 for z in range(0, 110, 10)])
+    ax1.set_xlabel(xlabel='1 - specificity')
+    ax1.set_ylabel(ylabel='Recall')
+    ax2=sns.lineplot(x=[i*0.01 for i in range (0, 110, 10)], y=[i*0.01 for i in range (0, 110, 10)])
+    ax2.lines[1].set_linestyle("--")
+    ax1.set(ylim=(0, 1.05), xlim=(0, 1.05))
+    ax2.set(ylim=(0, 1.05), xlim=(0, 1.05))
+    
+    thresopt = thres[threscrit.index(max(threscrit))]
+    print('The optimal threshold based on mean test and train f1-score is', thresopt)
+    plt.show()
+
+def lr_model_assessment(predictors, target, output1=True, output2 = False, pvaluedf=True, threshold = 0.5):
+    '''The function to plug different data into slightly less different logistic regression-models'''
+   
+    predictors=sm.add_constant(predictors)
+    x_train, x_test, y_train, y_test = train_test_split(predictors, target, test_size=0.25, random_state=1)
+    columns = predictors.columns
+
+    os = SMOTE(random_state=0)
+    os_data_X,os_data_y=os.fit_resample(x_train, y_train)
+    x_train = pd.DataFrame(data=os_data_X,columns=columns)
+    x_train = preprocessing.normalize(x_train)
+    x_train = pd.DataFrame(data=x_train,columns=columns)
+    y_train = pd.DataFrame(data=os_data_y)
+    normalizer = preprocessing.Normalizer().fit(x_train)
+    x_test = normalizer.transform(x_test)
+
+    clf=sm.Logit(y_train, x_train).fit(method='bfgs')
+    print(clf.summary())
+
+    yhattrain = clf.predict(x_train)
+    yhattrain = list(map(lambda x: 0 if x < threshold else 1, yhattrain))
+    cmtrain = metrics.confusion_matrix(y_train, yhattrain)
+    yhattest = clf.predict(x_test)
+    yhattest = list(map(lambda x: 0 if x < threshold else 1, yhattest))
+    
+    cmtest = metrics.confusion_matrix(y_test, yhattest)
+
+    if output1==True:
+        print ("Train Confusion Matrix : \n", cmtrain, '\n')
+        print("Train Accuracy : ", metrics.accuracy_score(y_train, yhattrain),'\n')
+        print("Train f1-score : ", metrics.f1_score(y_train, yhattrain), '\n')
+        print("Train Recall : ", metrics.recall_score(y_train, yhattrain), '\n')
+        print("Train Precision : ", metrics.precision_score(y_train, yhattrain), '\n')
+        print ("Test Confusion Matrix : \n", cmtest)
+        print("Test Accuracy : ", metrics.accuracy_score(y_test, yhattest), '\n')
+        print("Test f1-score : ", metrics.f1_score(y_test, yhattest), '\n')
+        print("Test Recall : ", metrics.recall_score(y_test, yhattest), '\n')
+        print("Test Precision : ", metrics.precision_score(y_test, yhattest), '\n')
+    
+    if output2==True:
+        return float(metrics.f1_score(y_test, yhattest))
+
+    if pvaluedf==True:
+        pvaluedf=pd.DataFrame({'coefficient':clf.params, 'p-value':clf.pvalues}).reset_index()
+        pvaluedf.drop(pvaluedf[pvaluedf['p-value']>0.05].index, inplace=True)
+        pvaluedf=pvaluedf.sort_values(by=['p-value'], ascending=True)
+        return pvaluedf
+
+lrdf = modeldf
+
+lr_roc(predictors=lrdf.iloc[:, 1:], target=lrdf.MJ_RELATION_TYPE)
+```
+
+fig30. The ROC-curve for the model containing all the predictors is tolerable but it is clear the model will not be as accurate as the random forest one.
+
+```{python first logistic regression model}
+lr_model_assessment(predictors=lrdf.iloc[:, 1:], target=lrdf.MJ_RELATION_TYPE, threshold=0.33)
+```
+
+<div style="max-width:1000px; text-align: justify;"> Peformance of the model is not bad, however, a tiny number of coefficients with low p-values indicates that the logistic regression is puzzled. Particularly, if we subset take only the predictors with low p-values, the model will not function properly.</div>
+
+```{python low p-values logistic regression model ROC curve}
+lr_roc(predictors=lrdf[['VIOLENCE_RELATION_violent', 'OFFENSE_CATEGORY_ID_Burglary', 'duration', 'OFFENSE_CATEGORY_ID_Robbery-Street-Res']], target=lrdf.MJ_RELATION_TYPE)
+```
+
+fig31. The ROC-curve does not look promising. 
+
+```{python low p-values logistic regression model display}
+lr_model_assessment(predictors=lrdf[['VIOLENCE_RELATION_violent', 'OFFENSE_CATEGORY_ID_Burglary', 'duration', 'OFFENSE_CATEGORY_ID_Robbery-Street-Res']], target=lrdf.MJ_RELATION_TYPE, pvaluedf=False, threshold=0.67)
+```
+
+And the performance is indeed poor. However, if we try using geographycal predictors only, the result will not be significantly better.
+
+```{python geo-based logistic regression model ROC curve}
+districts = lrdf.iloc[:, 25:99]
+hoods = lrdf.iloc[:, 5:11]
+geopredictors = pd.concat(objs= [districts, hoods, lrdf[['lat', 'long','dist']]], axis=1)
+lr_roc(predictors=geopredictors, target=lrdf.MJ_RELATION_TYPE)
+```
+
+fig32. The ROC-curve looks better... 
+
+```{python geo-based logistic regression model display}
+lr_model_assessment(predictors=geopredictors, target=lrdf.MJ_RELATION_TYPE, threshold=0.59)
+```
+
+...but the only satisfactory metric is precision. The rest of the metrics are below the standard.
+
+To help the model, we go on with subsetting the predictors focusing on geographycal ones but adding some other variable on top of them.
+
+```{python extended geo-based logistic regression model ROC curve}
+geomixpredictors = pd.concat(objs=[geopredictors.iloc[:, 0:80], lrdf.duration, lrdf.VIOLENCE_RELATION_violent], axis=1)
+lr_roc(predictors=geomixpredictors, target=lrdf.MJ_RELATION_TYPE)
+```
+
+fig33. The ROC-curve of the model based on geographycal preditors, crime duration and violence duration
+
+```{python extended geo-based logistic regression model display}
+lr_model_assessment(predictors=geomixpredictors, target=lrdf.MJ_RELATION_TYPE, threshold=0.46)
+```
+
+This way the model does manage to give good predictions.
+
+### Machine learning focused on other predictors
+
+<div style="max-width:1000px; text-align: justify;"> We have already built both random forest and logistic regression models using all the variables and then focusing on geo-related variables. Now we focus on time, violence relation and offense categories and follow the same sequence. </div>
+
+```{python random forest non-geo predictors based model}
+catpredictors = pd.concat(objs=[modeldf.iloc[:, 4], modeldf.iloc[:, 11:25], modeldf.iloc[:, 99:]], axis=1)
+rf_model_assessment(target=modeldf.MJ_RELATION_TYPE, predictors=catpredictors)
+```
+
+<div style="max-width:1000px; text-align: justify;"> fig34. Despite we have plenty of preditors the most important were two of three most common offense categories and violence flag. Time-related predictors did not have much importance.
+
+The above barplot makes us suggest dropping the time-related predictors.</div>
+
+```{python random forest non-geo no-time predictors based model}
+catpredictorsnotime = pd.concat(objs=[modeldf.iloc[:, 11:25], modeldf.iloc[:, 116]], axis=1)
+rf_model_assessment(target=modeldf.MJ_RELATION_TYPE, predictors=catpredictorsnotime)
+```
+
+<div style="max-width:1000px; text-align: justify;"> fig35. This model does not seem to be better. One should especially note bad performance on training set (which, in contrast to the test set, has equal number of industrial and non-industrial observations). So the time contributes much into the model's answer.
+
+However, if we try to refocus the model on time-related predictors only, this will not give a desired result.</div>
+
+```{python random forest non-geo no-time predictors based model}
+rf_model_assessment(target=modeldf.MJ_RELATION_TYPE, predictors=catpredictors.drop(labels=
+['OFFENSE_CATEGORY_ID_Burglary','OFFENSE_CATEGORY_ID_Robbery-Street-Res', 'VIOLENCE_RELATION_violent'], axis=1))
+```
+
+<div style="max-width:1000px; text-align: justify;"> fig36. Of course, we have not dropped all the predictors that are not time-related, but we excluded the top-3 important of them. The model did not crash, but its performance is far from good.
+
+This is why we should be tuning the initial geo-free model that includes both time-related and category-related predictors.</div>
+
+```{python non-geo predictors based  random forest model tuning}
+leest1 = []
+leest2 = []
+for i in range(1, 101, 1):
+    leest1.append(rf_model_assessment(predictors=catpredictors,
+    target=modeldf.MJ_RELATION_TYPE, plot = False, nestimators=i,
+    output1=False, output2 = True))
+    leest2.append(i)
+ax=sns.lineplot(x=leest2, y=leest1)
+ax.set_xticks(ticks = list(range(0, 110, 10)))
+ax.set_xlabel(xlabel='Number of trees')
+ax.set_ylabel(ylabel='F1-score')
+nestimators = leest2[leest1.index(max(leest1))]
+plt.show()
+
+leest1 = []
+leest2 = []
+for i in range(1, 50, 1):
+    leest1.append(rf_model_assessment(predictors=catpredictors,
+    target=modeldf.MJ_RELATION_TYPE, plot = False, maxdepth=i,
+    output1=False, output2 = True))
+    leest2.append(i)
+ax=sns.lineplot(x=leest2, y=leest1)
+ax.set_xticks(ticks = list(range(0, 55, 5)))
+ax.set_xlabel(xlabel='Maximum tree depth')
+ax.set_ylabel(ylabel='F1-score')
+maxdepth = leest2[leest1.index(max(leest1))]
+plt.show()
+
+
+leest1 = []
+leest2 = []
+for i in range(1, 50, 5):
+    leest1.append(rf_model_assessment(predictors=catpredictors,
+    target=modeldf.MJ_RELATION_TYPE, plot = False,
+    output1=False, output2 = True, maxfeatures=i))
+    leest2.append(i)
+ax=sns.lineplot(x=leest2, y=leest1)
+ax.set_xticks(ticks = list(range(0, 55, 5)))
+ax.set_xlabel(xlabel='Maximum features in tree')
+ax.set_ylabel(ylabel='F1-score')
+maxfeatures = leest2[leest1.index(max(leest1))]
+plt.show()
+```
+
+fig.fig.37-39. As it happened to the above plots of the same kind, the tendency is chaotic, but we can get use of the peaks recorded by the algorithm.
+
+```{python final non-geo predictors based random forest model}
+rf_model_assessment(target=modeldf.MJ_RELATION_TYPE, 
+predictors=catpredictors,
+nestimators=nestimators, maxdepth=maxdepth, maxfeatures=maxfeatures)
+```
+
+fig40. The barplot looks familiar despite some rank switches.
+
+The f1-score is over .91 again - the model may be deemed capable enough.
+
+In the same fashion we use the logistic regression here.
+
+```{python final non-geo predictors based logistic regression model ROC-curve}
+lr_roc(predictors=catpredictors, target=lrdf.MJ_RELATION_TYPE)
+```
+
+fig41. The ROC curve of the model including all non-geo predictors.
+
+```{python final non-geo predictors based logistic regression model display}
+lr_model_assessment(predictors=catpredictors, target=lrdf.MJ_RELATION_TYPE, threshold =0.33)
+```
+
+The model shows good performance. Let us try removing time-related predictors to compare the effect with the one we observed in random forest.
+
+```{python final non-geo no-time predictors based logistic regression model ROC-curve}
+lr_roc(predictors=catpredictorsnotime, target=lrdf.MJ_RELATION_TYPE)
+```
+
+fig42. The ROC curve of the model including all non-geo predictors except for time-related ones.
+
+```{python final non-geo no-time predictors based logistic regression model display}
+lr_model_assessment(predictors=catpredictorsnotime, target=lrdf.MJ_RELATION_TYPE, threshold=0.4)
+```
+
+This model is substantilly worse than the very first one. In such a way, the best logistic regression model not taking into account geographycal data should include both time-related and category-related variables.
+
+
+## Conclusion
+
+
+### Conclusion on q1:
+<ol>
+    <li>
+    <div style="max-width:1000px; text-align: justify;">From visualization:
+    The overall map of offences is not distributed uniformly. For example, the south-east of the city seems to be less criminal. However, as for the rest of the crime classifications the map seems to be mostly uniform (all the types: by violence, by offense category, by MJ relation look mixed up without any attraction centers). To sum up, these questions may not be answered by means of mere visualization.</div>
+    </li>
+
+
+    <li>
+    <div style="max-width:1000px; text-align: justify;">From correlation:</div>
+    <ol style="list-style-type: lower-alpha; padding-bottom: 0; ext-align: justify;">
+        <li style="margin-left:2em">
+        <div style="max-width:1000px; text-align: justify;">Positive correlation: between business robberies and Hale neigborhood, aggravated assault and 6th district, theft from motor vehicle and 7the district, Speer neighbourhood and graffity offences. This means these places are more vulnerable to these types of crimes. There is also a noticeable correlation between the distance to the city center and probability of burglary.</div>
+        </li>
+        
+        <li style="margin-left:2em">
+        <div style="max-width:1000px; text-align: justify;"> Negative correlation:  no significant negative correlation between any geographycal variable (be in DISTRICT_ID or NEIGHBORHOOD_ID) is present. The only exception is a negative correlation between burglary and 6th district (which means it is not likely to be burglared in the 6th dictrict).</div>
+        </li>
+        </ol>
+    
+    <li>
+    <div style="max-width:1000px; text-align: justify;">From visualization:The overall map of offences is not distributed uniformly. For example, the south-east of the city seems to be less criminal. However, as for the rest of the crime classifications the map seems to be mostly uniform (all the types: by violence, by offense category, by MJ relation look mixed up without any attraction centers). To sum up, these questions may not be answered by means of mere visualization.</div>
+    </li>
+</ol>
+
+### Conclusion on q2:
+
+<ol>
+    <li>
+    <div style="max-width:1000px; text-align: justify">From visualization:</div>
+    <ol style="list-style-type: lower-alpha; padding-bottom: 0; ext-align: justify;">
+        <li style="margin-left:2em">
+        <div style="max-width:1000px; text-align: justify">The crimes presented in the dataset are rather violent than not and are rather connected with industrial MJ-objects than not. This conclusion is vastly determined by predominance of burglaries, and burglary is both violent and industrial. Share of more aggravated crimes, including those connected with violence against people, is below 10%.</div>
+        </li>   
+        <li style="margin-left:2em">
+        <div style="max-width:1000px; text-align: justify">However, this does not mean that MJ makes people more violent. It would be more accurate to say that after MJ was legalized, places of its high concentration - industrial MJ-growing sites - appeared. If a person wants to get a lot of MJ, he or she is most likely to burglarize such site. Moreover, classification of burglaries as violent crimes is more a convention and does not match a common meaning of the word 'violence'. In such a way, predominance of violent crimes may be explained not by severity of people of Denver and not by the MJ impact on mental health, but by the way the MJ-industry is organized and by criminological convention. The main outcome of this observation is an emphasized necessity to control security of MJ industrial sites as the most likely crime locale.</div>
+        </li>
+        <li style="margin-left:2em">
+        <div style="max-width:1000px; text-align: justify"> One more notable fact is that a few crimes of the dataset are not connected with other crime object than drugs. In other words, after the MJ was legalized, not so many cases of purely drug crimes connected with it were registered. This demonstrates that MJ-consumers are relatively unconcerned with other hazardous substances.</div>
+        </li>
+        <li style="margin-left:2em">
+        <div style="max-width:1000px; text-align: justify"> Finally, we should note that majority of crimes treat MJ as a property (burglaries, larcenies etc.). Therefore a typical MJ-criminal of Denver is not a deep-rooted drug addict but a person wishing to get the hands of MJ just like on any other asset. Hence the MJ-crimes should be mainly combatted by means intended for combatting crimes against property than by countermeasures against illegal drug circulation. For instance, eliminating poverty and social inequality would be more useful compared to increase of MJ-specific control measures.</div>
+        </li>
+    </ol>
+    </li>
+    
+    <li>
+    <div style="max-width:1000px; text-align: justify">The correlation part of the report are not particularly valuable for replying the second question.</div>
+    </li>
+
+    
+    <li>
+    <div style="max-width:1000px; text-align: justify">The machine learning part of the report reveals high degree of importance of information about crime type and the time when it was committed to resolve the posed machine learning problem. However, it was discovered that no model where the crime type and its violence relation were the only predictors could achieve sufficient accuracy and f1-score. Consequently, a purely geographycal portrait of the crime is more valuable than a purely qualitative one. Deep analysis of crime type related random forest splits or crime type dummies' coefficients for logistic regression would be misleading due to extreme skewness of crimes type map (e. g. a node 'Burglary or not' will be very informative for predicting not only 'MJ_RELATION_TYPE' but many other target variables as well, which just reminds us about number of burglaries in the dataset and their criminological attributes without recourse to actual features of the MJ-crimes population).</div>
+    </li>
+</ol>
+
+### Conclusion on q3:
+
+
+<div style="max-width:1000px; text-align: justify"> The posed machine learning problem was resolved by means of random forest and logistic regression. Both types of models proved themselves to be suitable to predict the target value of MJ_RELATION_TYPE.
+
+
+The main limitation of all the machine learning performed (as well as of the machine learning interpretation performed in qq1,2) was the focus of MJ_RELATION_TYPE variable. In other words, some insights might be obtained from machine learning based aimed at other target values. However, due to the framework of this project full analysis was infeasible, and importance of preditors, their statistical significance were assessed for predicting indistrial or non-industrial nature of the offense only.
+
+
+Nevertheless, the nature of the task and domain the research was conducted within require the model to be interpretable. As the random forest models optimal number of trees was over 20 in all cases, it was impossible to visualize the trees, so the only visualization means was feature importance ranking. However, the ranking itself is not informative in this case, we are more interested in the split thresholds we cannot visualize due to number of trees. This is why the logistic regression models fits the task better.
+
+
+Main feature of the logistic regression analysis was constant limitation of the number of predictors. Due to dummification of categorical variables there were over 100 predictors, so initial logistic regression model misfunctioned: a few p-values were low enough to explore them further, coefficients could also be delusive. After predictor subsetting was performed, logistic regression model improved its performance and provided for many significant coefficients which could be interpretable. For instance, burglary dummy variable had a strongly positive coefficient (being a burglary adds up to the chances of the offense to be industrial) while the street robbery dummy coefficient was one of the most negative (as no street robbery is industrial). 
+
+
+However, machine learning was not very insightful in terms of new recommendation for the police not highlighted for questions 1 and 2. The general output of the models designed is that a crime is a very multifaceted phenomenon, and its features cannot be predicted with sufficient accuracy (in common meaning of this term) without predictors reflecting only the time when the crime was committed, only its location, only its type etc. The more predictors related to different crime aspects are at hand, the more successful the model is. In this respect we may recommend the police department of Denver to broaden the data they collect. For example, adding a number of criminals involved or at least a flag of a crime committed by a group, organized gang etc. would be very beneficial.</div>
