@@ -466,7 +466,7 @@ ax.legend(labels=Monthlabels)
 plt.show()
 ```
 
-fig17. Here we should note that the bars are not stacked: the left-most section represents the least criminal month. So we may notice that there are some months (April, May, December, July) that win in different crimes. This displays a variance of crime types we have in the dataset.
+fig17. Here we should note that the bars are not stacked intentionally for the sake of clarity: the left-most section represents the least criminal month. So we may notice that there are some months (April, May, December, July) that win in different crimes. This displays a variance of crime types we have in the dataset.
 
 For plotting over weekdays we again get the four most frequent crimes, otherwise the plot is hard to grasp.
 
@@ -555,7 +555,7 @@ corrdf = df[['MJ_RELATION_TYPE', 'lat', 'long', 'DISTRICT_ID', 'OFFENSE_CATEGORY
 corrdf = pd.get_dummies(data=corrdf, drop_first=True, columns=['DISTRICT_ID', 'OFFENSE_CATEGORY_ID',
 'NEIGHBORHOOD_ID', 'Month', 'Day Name',  'VIOLENCE_RELATION', 'MJ_RELATION_TYPE'])
 
-def get_top_abs_correlations(df, n=30, geography_only=False):
+def get_top_abs_correlations(df, n=10, geography_and_offense_only=False):
     '''Tune n to change the number of top correlations'''
     au_corr = df.corr(method='spearman').unstack()
     au_corr = au_corr.sort_values(ascending=False)
@@ -563,42 +563,49 @@ def get_top_abs_correlations(df, n=30, geography_only=False):
     au_corr = au_corr[au_corr[0]!=1]
     au_corr.drop_duplicates(subset=0, inplace = True)
     au_corr.rename(columns={'level_0': 'Value1', 'level_1': 'Value2', 0:'Correlation_coef'}, inplace=True)
+    #filter insignificant correlations
+    au_corr = au_corr[abs(au_corr.Correlation_coef)>0.1] 
+    au_corrng = au_corr
 
-    if geography_only:   
-        au_corr = au_corr[abs(au_corr.Correlation_coef)>0.1] #filter insignificant correlations
-        #filter the correlation df for pairs composed of ('NEIGHBORHOOD_ID','DISTRICT_ID', 'OFFENSE_CATEGORY_ID', 'lat', 'long')
-        au_corr =  au_corr[au_corr.Value1.str.startswith(('NEIGHBORHOOD_ID','DISTRICT_ID', 'OFFENSE_CATEGORY_ID', 'lat', 'long', 'dist'))]
-        au_corr =  au_corr[au_corr.Value2.str.startswith(('NEIGHBORHOOD_ID','DISTRICT_ID', 'OFFENSE_CATEGORY_ID', 'lat', 'long', 'dist'))]
-        #get the part where the first column is geographical and the second is offense category
-        au_corr1 = au_corr[au_corr.Value1.str.startswith(('NEIGHBORHOOD_ID','DISTRICT_ID','lat', 'long', 'dist'))]
-        au_corr1 = au_corr1[au_corr1.Value2.str.startswith(('OFFENSE_CATEGORY_ID'))]
-        #get the part where the first column is offense category and the second is geographical 
-        au_corr2 =  au_corr[au_corr.Value1.str.startswith(('OFFENSE_CATEGORY_ID'))]
-        au_corr2 = au_corr2[au_corr.Value2.str.startswith(('NEIGHBORHOOD_ID','DISTRICT_ID','lat', 'long', 'dist'))]
-        #concatenate the two parts
-        au_corr = pd.concat([au_corr1, au_corr2])
-        
-    else:
-        au_corr = pd.concat([au_corr.iloc[0:n, :], au_corr.iloc[len(au_corr)-1-n:len(au_corr)-1, :]], axis=0)
-    
+    #filter the correlation df for pairs composed of ('NEIGHBORHOOD_ID','DISTRICT_ID', 'OFFENSE_CATEGORY_ID', 'lat', 'long')
+    au_corr =  au_corr[au_corr.Value1.str.startswith(('NEIGHBORHOOD_ID','DISTRICT_ID', 'OFFENSE_CATEGORY_ID', 'lat', 'long', 'dist'))]
+    au_corr =  au_corr[au_corr.Value2.str.startswith(('NEIGHBORHOOD_ID','DISTRICT_ID', 'OFFENSE_CATEGORY_ID', 'lat', 'long', 'dist'))]
+    #get the part where the first column is geographical and the second is offense category
+    au_corr1 = au_corr[au_corr.Value1.str.startswith(('NEIGHBORHOOD_ID','DISTRICT_ID','lat', 'long', 'dist'))]
+    au_corr1 = au_corr1[au_corr1.Value2.str.startswith(('OFFENSE_CATEGORY_ID'))]
+    #get the part where the first column is offense category and the second is geographical 
+    au_corr2 =  au_corr[au_corr.Value1.str.startswith(('OFFENSE_CATEGORY_ID'))]
+    au_corr2 = au_corr2[au_corr.Value2.str.startswith(('NEIGHBORHOOD_ID','DISTRICT_ID','lat', 'long', 'dist'))]
+    #concatenate the two parts
+    au_corr = pd.concat([au_corr1, au_corr2])
     au_corr = au_corr.sort_values(by='Correlation_coef', ascending=False)
+            
+    if not geography_and_offense_only:
+        au_corr =  au_corrng[au_corrng.Value1.str.startswith(('NEIGHBORHOOD_ID','DISTRICT_ID','lat', 'long', 'dist', 'Month', 'Day Name'))]
+        au_corr =  au_corr[au_corr.Value2.str.startswith(('NEIGHBORHOOD_ID','DISTRICT_ID', 'lat', 'long', 'dist', 'Month', 'Day Name'))]
+        print(au_corr)
+        au_corr=au_corrng.merge(au_corr, on=['Value1', 'Value2', 'Correlation_coef'], how='left', indicator=True)
+        au_corr=au_corr[au_corr._merge=='left_only'].drop(axis=1, labels='_merge')
+        au_corr = pd.concat([au_corr.iloc[0:n, :], au_corr.iloc[len(au_corr)-1-n:len(au_corr)-1, :]], axis=0)
+        
     return au_corr
 
 get_top_abs_correlations(corrdf)
 ```
 
-<div style="max-width:1000px; text-align: justify;"> So the highest correlation we see is between geographycal variables. As for the rest, we may highlight strong positive correlation between violence and being burglary, the opposite for being larceny; between being street robbery and being non-industrial crime, the opposite - for being burglary.
-We also see that the dataset does not have a plenty of highly correlated values (i. e. with absolute value over 0.6). Yes, there are some, but it is not that much for >100 variables.</div>
+<div style="max-width:1000px; text-align: justify;"> We may highlight that the table shows evident correlations arising from crime classification: e. g. strong positive correlation between violence and being burglary, the opposite for being larceny; between being street robbery and being non-industrial crime, the opposite - for being burglary. It is especially true for the largest negative correlations.
+We also see that the dataset does not have a plenty of highly correlated values (i. e. with absolute value over 0.5). Yes, there are some, but it is not that much for >100 variables.</div>
 
 With regard to question 1, we also need to look at correlations between offence types and geographycal variables. Let's do this by filtering the correlation df.
 
 ```{python category-geo correlation}
-get_top_abs_correlations(corrdf, geography_only=True)
+get_top_abs_correlations(corrdf, geography_and_offense_only=True)
 ```
 
  <div style="max-width:1000px; text-align: justify;"> Some hoods correlate with some crimes positively: positive correlation exists between business robberies and Hale neigborhood, aggravated assault and 6th district, theft from motor vehicle and 7the district, Speer neighbourhood and graffity offences.</div>
  The only outstanding negative correlation is between burglary and 6th district. 
- Absolute valus of the rest of the correlations are below 0.15.
+ With regard to the 6th and the 7th district we may conclude that their correlaions with other variables are mutually connected: e. g. district 6 is strongly correlated with aggravated assault; since this is a non-industrial crime, it is also strongly correlated with MJ_RELATION_TYPE_NON-INDUSTRY.
+ Absolute values of the rest of the correlations are below 0.15.
 
  As a result, we have got a dataset with a few collinearity issues. 
 
@@ -685,7 +692,7 @@ predictors=modeldf.iloc[:, 1:].drop(labels=['OFFENSE_CATEGORY_ID_Robbery-Street-
 fig25. The performance is slightly worse again, but still acceptable. This time top-3 predictors are geographycal, but the model remains effective.
 
 <div style="max-width:1000px; text-align: justify;"> At this point we state the predictor subsetting reached a tolerable mark, and now it is time to tune parameters of the model.</div>
-The metric we will consider for this purpose will be f1-score because it comprises both precision and recall evaluation.
+The metric we will consider for this purpose will be the test f1-score because it comprises both precision and recall evaluation. We do not take into account the train f1-score because the modelling evidences training f1-score was close to perfect all the time.
 We visualize the parameters vs. f1-score first and then use the best-fitting parameters to obtain the final model. 
 
 ```{python random forest plots for f1-score}
@@ -745,7 +752,8 @@ nestimators=nestimators, maxdepth=maxdepth, maxfeatures=maxfeatures)
 <div style="max-width:1000px; text-align: justify;"> fig. 29. The model has not changed its focus on geo-predictors, the rest of the predictors have not promoted greately. The f1-score is now over 0.91, which is fairly high. 
 
 Due to limited interpretability issues of random forest models and desire to get an interpretable result, we now turn to logistic regression.
-The procedure for this will be as follows: first, we make a ROC-curve to compute the best classifition threshold considering the mean of train and test f1-scores (in  random forest train performance was almost perfect all the time, so there was no point in computing the mean). Then we use the threshold to improve the modell. All this is done alongside with predictor subsetting.</div>
+The procedure for this will be as follows: first, we make a ROC-curve to compute the best classifition threshold considering the mean of train and test f1-scores (in  random forest train performance was almost perfect all the time, so there was no point in computing the mean). Then we use the threshold to improve the model. All this is done alongside with predictor subsetting.
+Note that the model is assessed particularly with confusion matrix for both model training and testing. The number of observations seen in the training confusion matrix should not be surprising due to oversampling having been performed.</div>
 
 ```{python logistic regression init}
 def lr_roc(predictors, target):
