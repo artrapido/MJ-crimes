@@ -1,5 +1,5 @@
 # MJ-crimes
-Insight mining in data concerning MJ-related crimes in Denver, CO. 
+Insight mining in data concerning MJ-related crimes in Denver, CO. Contains a dashboard as well.
 
 The principal question of the project was determination of key features and factors of MJ-related crimes committed in Denver in connection with industrial 
 (on the one hand) and non-industrial (on the other hand) objects or victims. 
